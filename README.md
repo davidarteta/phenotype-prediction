@@ -1,5 +1,5 @@
 # phenotype-prediction
-R code to predict a phenotype based on genotypes, using SVM and Random Forest
+R code to predict a phenotype based on genotypes, using SVM and Random Forest classification algorithms
 
 This repository shows part of a project to evaluate the importance of genetic predisposition for a given clinical outcome. The dataset comes from a GWAS experiment where about 400 subjects were genotyped using an Illumina Infinium Global Screening array.
 
