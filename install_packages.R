@@ -1,6 +1,7 @@
 required_packages = c(
   "glmnet",
-  "caret"
+  "caret",
+  "plyr"
 )
 
 packages_to_install = required_packages[!(required_packages %in% installed.packages()[, 1])]
