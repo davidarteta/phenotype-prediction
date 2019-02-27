@@ -5,7 +5,6 @@ library(glmnet)
 ###Get data for first fold
 fold1.df<-read.table("fold1_signiSNPs_fullsamples.raw", sep=" ", header=TRUE, as.is=TRUE)
 dim(fold1.df)
-#[1]   364 59927
 #get sample IDs for fold1
 fold1_trainIDs<-read.table("../../input/fold1_keep.txt", sep="\t", header=FALSE, as.is=TRUE)
 #there are still some missing genotypes that need to be removed so that glm works
@@ -20,14 +19,11 @@ test1.df<-fold1_noNAs.df[fold1_noNAs.df$IID %ni% fold1_trainIDs$V2,]
 
 ###
 ###GLM with LASSO penalization for feature selection
-#> train1.dat.m<-data.matrix(train1.dat[-1:-5])#no tengo muy claro si esto sirve para algo. En algún momento sirvió
 y1.train <-factor(train1.df$PHENOTYPE)
 x1.train<-data.matrix(train1.df[-1:-6])
 fit1 <- glmnet(x1.train,y1.train,family="binomial",standardize=TRUE)
 coefs1=coef(fit1,s=min(fit1$lambda))
 lasso.coeff.best1<-cbind(coefs1@Dimnames[[1]][which(coefs1 !=0)],coefs1[which(coefs1 != 0)])
-dim(lasso.coeff.best1)
-
 head(lasso.coeff.best1)
 #     [,1]           [,2]                  
 #[1,] "(Intercept)"  "2.33029016149315"    
@@ -38,12 +34,9 @@ head(lasso.coeff.best1)
 #[6,] "rs72647619_C" "-0.0113019269147701" 
 
 x1_lasso.train<-train1.df[,colnames(train1.df) %in% lasso.coeff.best1[-1,1]]
-dim(x1_lasso.train)
 
-class(x1_lasso.train)
-
-
-#We now need a dependent variable of characters otherwise it will throw an error Error: At least one of the class levels is not a valid R variable name; This will cause errors #when class probabilities are generated because the variables names will be converted to  X1, X2 . Please use factor levels that can be used as valid R variable names  (see ?#make.names for help).
+#We now need a dependent variable of characters otherwise it will throw an error Error: At least one of the class levels is not a valid R variable name; 
+#This will cause errors when class probabilities are generated because the variables names will be converted to  X1, X2 . Please use factor levels that can be used as valid R variable names  (see ?#make.names for help).
 y1.train.cat <- sapply(y1.train, switch,
 "1" = "No",
 "2" = "Yes")
@@ -51,20 +44,14 @@ y1.train.cat <- sapply(y1.train, switch,
 #> dat1.train <-cbind(x1_lasso.train,y1.train.cat)
 dat1.train<-x1_lasso.train
 dat1.train["PHENOTYPE"]<-y1.train.cat
-#dim(x1_lasso.train)
-
-#dim(dat1.train)
-
-#class(dat1.train)
 
 
 set.seed(3233)
 fitControl<-trainControl(method="cv",number=10, classProbs=TRUE, summaryFunction=twoClassSummary, savePredictions=TRUE)
 
 svmFit1 <- train(PHENOTYPE ~ ., data =dat1.train, method="svmLinear2",tuneLength=10, trControl=fitControl,preProc = c("center","scale"),metric= "ROC")
-#svmFit1
 
-#Me he dado cuenta que el individuo con fenotipo desconocido sigue por ahí y lo tengo que quitar. #Ahora está en el testset
+#There was an observation with a missing Phenotype in the test set, so I remove it
 test1.df<-test1.df[-74,]
 y1.test<-factor(test1.df$PHENOTYPE)
 x1_lasso.test<-test1.df[,colnames(test1.df) %in% lasso.coeff.best1[-1,1]]
@@ -76,6 +63,7 @@ dat1.test["PHENOTYPE"]<-y1.test.cat
 
 ###
 ###Support Vector Machine
+#We will use linear and non-linear SVM
 svm.pred1<-predict(svmFit1,newdata=dat1.test)
 confusionMatrix(svm.pred1,as.factor(dat1.test$PHENOTYPE),positive = "YES")
        
@@ -97,7 +85,6 @@ svmFit1_RBF <- train(PHENOTYPE ~ ., data =dat1.train, method="svmRadial",tuneLen
 svmFit1_RBF
 test_pred_RBF <- predict(svmFit1_RBF, newdata = dat1.test)
 confusionMatrix(test_pred_RBF,as.factor(dat1.test$PHENOTYPE),positive = "YES")
-#Better sensitivity, worse specificity
 
 
 ###
@@ -126,13 +113,15 @@ control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid"
 set.seed(3233)
 tunegrid <- expand.grid(.mtry=c(2:25))
 rf1_gridsearch <- train(PHENOTYPE~., data=dat1.train, method="rf", metric="ROC", tuneGrid=tunegrid, trControl=control)
-print(rf1_gridsearch)
-plot(rf1_gridsearch)
-#So the best mtry was 7. Lets rerun with mtry=7 but this time increase the forest to 1001 trees
+#print(rf1_gridsearch)
+#plot(rf1_gridsearch)
+#get the best mtry for the forest. 
+best_mtry = rf1_gridsearch$finalModel$mtry
+#Lets rerun with best_mtry but this time increase the forest to 1001 trees.( A suggested number of trees in the fiels is at least 1000)
 set.seed(3233)
-rf1_7_1001 <- train(PHENOTYPE~., data=dat1.train, method="rf", metric="ROC",ntree=1001, trControl=control,tuneGrid=data.frame(mtry=7))
-print(rf1_7_1001)
+rf1_best_mtry_1001 <- train(PHENOTYPE~., data=dat1.train, method="rf", metric="ROC",ntree=1001, trControl=control,tuneGrid=data.frame(mtry=best_mtry))
+print(rf1_best_mtry_1001)
 
-test_pred_RF1_7_1001 <- predict(rf1_7_1001, newdata = dat1.test)
-confusionMatrix(test_pred_RF1_7_1001,as.factor(dat1.test$PHENOTYPE),positive = "YES")
+test_pred_RF1_best_mtry_1001 <- predict(rf1_best_mtry_1001, newdata = dat1.test)
+confusionMatrix(test_pred_RF1_best_mtry_1001,as.factor(dat1.test$PHENOTYPE),positive = "YES")
 
